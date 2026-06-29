@@ -69,6 +69,19 @@ This produces a runnable fat jar at `target/cassandra-store-sim.jar`.
 
 ## Usage
 
+A convenience wrapper, [`store.sh`](store.sh), runs the built jar and passes all
+arguments straight through (it assumes `mvn package` has been run and `java` is on the
+PATH):
+
+```bash
+./store.sh --help
+./store.sh create-schema -k store --replication-factor 3
+./store.sh simulate -k store --parallelism 64 --operations 100000000
+./store.sh drop-schema -k store
+```
+
+The equivalent explicit invocations:
+
 ```bash
 # 1. Create the schema (RF configurable)
 java -jar target/cassandra-store-sim.jar create-schema \
