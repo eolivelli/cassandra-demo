@@ -76,9 +76,37 @@ PATH):
 ```bash
 ./store.sh --help
 ./store.sh create-schema -k store --replication-factor 3
+./store.sh create-indexes -k store -t "CREATE CUSTOM INDEX %s ON %s.%s (email) USING 'StorageAttachedIndex'"
 ./store.sh simulate -k store --parallelism 64 --operations 100000000
 ./store.sh drop-schema -k store
 ```
+
+### Creating indexes (optional phase)
+
+`create-indexes` runs one `CREATE INDEX` per table from a template you supply. The
+template must contain exactly **three `%s` placeholders**, filled in this order:
+
+1. the index name, computed automatically as `index_<table>` (e.g. `index_customers`),
+2. the keyspace name,
+3. the table name.
+
+Any other literal `%` in the template (for example inside `WITH OPTIONS`) must be escaped
+as `%%`.
+
+```bash
+./store.sh create-indexes -k store \
+    -t "CREATE CUSTOM INDEX %s ON %s.%s (email) USING 'StorageAttachedIndex' WITH OPTIONS = {'case_sensitive':'false'}"
+```
+
+This iterates over the tables (`customers`, `products`, `orders`) and executes, e.g.:
+
+```sql
+CREATE CUSTOM INDEX index_customers ON store.customers (email) USING 'StorageAttachedIndex' WITH OPTIONS = {'case_sensitive':'false'}
+```
+
+The same phase can be run as part of `simulate` with `--create-indexes --index-template "…"`
+(and `--create-schema` before it, if needed). Because a single template is applied to
+every table, make sure the column(s) it references exist on all of them.
 
 The equivalent explicit invocations:
 
@@ -114,6 +142,8 @@ convenience.
 | `--categories` | built-in list | comma-separated product categories |
 | `-c, --consistency` | QUORUM | consistency level for every operation |
 | `--replication-factor` | 1 | RF (for `create-schema`, or `simulate --create-schema`) |
+| `--create-indexes` | off | create indexes before running (needs `--index-template`) |
+| `-t, --index-template` | — | `CREATE INDEX` template with three `%s` (index, keyspace, table) |
 | `--pool-connections` | 4 | driver connections per node |
 
 Connection options (`-H/--host`, `-P/--port`, `-d/--datacenter`, `-k/--keyspace`,

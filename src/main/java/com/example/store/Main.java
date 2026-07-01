@@ -1,5 +1,6 @@
 package com.example.store;
 
+import com.example.store.cli.CreateIndexesCommand;
 import com.example.store.cli.CreateSchemaCommand;
 import com.example.store.cli.DropSchemaCommand;
 import com.example.store.cli.SimulateCommand;
@@ -21,6 +22,7 @@ import picocli.CommandLine.Command;
         description = "Simulate a real-world online computer store workload on Apache Cassandra 5.",
         subcommands = {
                 CreateSchemaCommand.class,
+                CreateIndexesCommand.class,
                 DropSchemaCommand.class,
                 SimulateCommand.class
         })

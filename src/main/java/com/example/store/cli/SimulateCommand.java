@@ -9,6 +9,8 @@ import com.example.store.sim.Stats;
 import picocli.CommandLine.Command;
 import picocli.CommandLine.Mixin;
 import picocli.CommandLine.Option;
+import picocli.CommandLine.Spec;
+import picocli.CommandLine.Model.CommandSpec;
 
 import java.util.List;
 import java.util.concurrent.Callable;
@@ -16,6 +18,9 @@ import java.util.concurrent.Callable;
 @Command(name = "simulate",
         description = "Run the online-store workload simulation against Cassandra.")
 public class SimulateCommand implements Callable<Integer> {
+
+    @Spec
+    CommandSpec spec;
 
     @Mixin
     ConnectionOptions conn = new ConnectionOptions();
@@ -68,12 +73,31 @@ public class SimulateCommand implements Callable<Integer> {
             description = "RF used only when --create-schema is set (default: ${DEFAULT-VALUE}).")
     int replicationFactor;
 
+    @Option(names = {"--create-indexes"}, defaultValue = "false",
+            description = "Create one index per table (from --index-template) before running.")
+    boolean createIndexes;
+
+    @Option(names = {"-t", "--index-template"},
+            description = "CREATE INDEX template with three '%%s' placeholders (index, keyspace, table). "
+                    + "Required when --create-indexes is set.")
+    String indexTemplate;
+
     @Override
     public Integer call() {
-        if (createSchema) {
+        if (createSchema || createIndexes) {
+            if (createIndexes && (indexTemplate == null || indexTemplate.isBlank())) {
+                throw new picocli.CommandLine.ParameterException(spec.commandLine(),
+                        "--create-indexes requires --index-template");
+            }
             try (CqlSession s = CassandraConnector.connect(
                     conn.host, conn.port, conn.datacenter, conn.consistency, null, conn.poolConnections)) {
-                new SchemaManager(s, conn.keyspace).createSchema(replicationFactor);
+                SchemaManager schema = new SchemaManager(s, conn.keyspace);
+                if (createSchema) {
+                    schema.createSchema(replicationFactor);
+                }
+                if (createIndexes) {
+                    schema.createIndexes(indexTemplate);
+                }
             }
         }
 

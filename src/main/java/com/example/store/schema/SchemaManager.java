@@ -24,6 +24,9 @@ public final class SchemaManager {
 
     private static final Logger LOG = LoggerFactory.getLogger(SchemaManager.class);
 
+    /** The tables managed by this schema, in creation order. */
+    public static final List<String> TABLE_NAMES = List.of("customers", "products", "orders");
+
     private final CqlSession session;
     private final String keyspace;
 
@@ -50,6 +53,47 @@ public final class SchemaManager {
             session.execute(ddl);
         }
         LOG.info("Schema created in keyspace {}", keyspace);
+    }
+
+    /**
+     * Optional "create indexes" phase: for every table, format the supplied template and
+     * run it. The template must contain exactly three {@code %s} placeholders, filled in
+     * this order: the index name (computed automatically as {@code index_<table>}), the
+     * keyspace name, and the table name. For example:
+     *
+     * <pre>
+     *   CREATE CUSTOM INDEX %s ON %s.%s (email) USING 'StorageAttachedIndex' WITH OPTIONS = {...}
+     * </pre>
+     *
+     * Any other {@code %} in the template must be escaped as {@code %%}.
+     */
+    public void createIndexes(String template) {
+        for (String cql : buildIndexStatements(template)) {
+            LOG.info("Creating index: {}", cql);
+            session.execute(cql);
+        }
+        LOG.info("Indexes created in keyspace {}", keyspace);
+    }
+
+    /**
+     * Renders the index template once per table, without touching Cassandra. The template
+     * placeholders are filled in the order: index name ({@code index_<table>}), keyspace,
+     * table.
+     */
+    public List<String> buildIndexStatements(String template) {
+        List<String> statements = new java.util.ArrayList<>(TABLE_NAMES.size());
+        for (String table : TABLE_NAMES) {
+            String indexName = "index_" + table;
+            try {
+                statements.add(String.format(template, indexName, keyspace, table));
+            } catch (IllegalArgumentException e) {
+                throw new IllegalArgumentException(
+                        "Invalid index template. It must contain exactly three %s placeholders " +
+                                "(index name, keyspace, table) and escape any literal % as %%. Template was: "
+                                + template, e);
+            }
+        }
+        return statements;
     }
 
     /** Drops the entire keyspace. */

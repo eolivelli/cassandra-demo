@@ -56,7 +56,22 @@ class StoreSimulationTest {
     void createsSchemaRunsSimulationAndDrops() {
         // Create the schema (RF=1 for a single-node container).
         try (CqlSession session = CassandraConnector.connect(host, port, datacenter, CONSISTENCY, null, 2)) {
-            new SchemaManager(session, KEYSPACE).createSchema(1);
+            SchemaManager schema = new SchemaManager(session, KEYSPACE);
+            schema.createSchema(1);
+
+            // Prove the "create indexes" phase produces valid, executable Cassandra 5
+            // SAI DDL. The customers table has an 'email' column, so run the statement
+            // the template generates for it and confirm the index really exists.
+            String template = "CREATE CUSTOM INDEX %s ON %s.%s (email) USING 'StorageAttachedIndex'";
+            String customersIndexDdl = schema.buildIndexStatements(template).get(0);
+            session.execute(customersIndexDdl);
+
+            boolean indexExists = session.getMetadata().getKeyspace(KEYSPACE)
+                    .flatMap(ks -> ks.getTable("customers"))
+                    .map(t -> t.getIndexes().containsKey(
+                            com.datastax.oss.driver.api.core.CqlIdentifier.fromCql("index_customers")))
+                    .orElse(false);
+            assertTrue(indexExists, "index_customers should have been created");
         }
 
         Stats stats = new Stats();
